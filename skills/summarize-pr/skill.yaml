@@ -1,0 +1,9 @@
+name: summarize-pr
+version: 1.0.0
+description: Summarize a pull request into a concise, human-readable description.
+author: aiskills
+tags:
+  - pull-request
+  - summary
+  - changelog
+  - documentation
