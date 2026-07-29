@@ -69,7 +69,7 @@ if [[ $# -eq 0 ]]; then
   done
 else
   # Install only the requested skill(s)
-  info "Installing ${#}  skill(s) to ${SKILLS_DEST} ..."
+  info "Installing ${#} skill(s) to ${SKILLS_DEST} ..."
   for skill in "$@"; do
     install_skill "${skill}"
   done
