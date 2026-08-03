@@ -1,26 +1,15 @@
 ---
-name: my-python-app-skill
-description: When I ask for my python process, or my python skill, follow these rules.  Use this skill whenCreating a new Python application, Scaffolding a Python project, Setting up a new FastAPI or FastMCP project, or Initializing a Python project from scratch
-metadata:
-  copyright: Copyright Freshbrewed. 2026
-  version: "0.0.1"
+name: python-app-setup
+description: Scaffolding and setting up Python applications, FastAPI APIs, FastMCP servers, and project structures in this workspace. ALWAYS trigger this skill whenever the user mentions creating a new Python project, setting up a Python service, scaffolding FastAPI/FastMCP, initializing a Python app from scratch, or asking for Python project conventions.
 ---
 
 # Python App Setup Skill
 
-This skill defines the preferred setup for Python applications in this workspace.
-
-## When to Use This Skill
-
-Use this skill when:
-- Creating a new Python application
-- Scaffolding a Python project
-- Setting up a new FastAPI or FastMCP project
-- Initializing a Python project from scratch
+Defines the required setup conventions, project structure, and boilerplate rules for Python applications in this workspace.
 
 ## Required Project Structure
 
-All Python apps must include the following files and structure:
+All Python applications must adhere to the following file layout:
 
 ```
 project/
@@ -29,7 +18,7 @@ project/
 ├── version.ini
 ├── pyproject.toml
 ├── pytest.ini
-├── openapi.yaml
+├── openapi.yaml (required for FastAPI apps)
 ├── README.md
 ├── INSTALL.md
 ├── SYSTEM.md
@@ -43,114 +32,96 @@ project/
     └── test_main.py
 ```
 
-## Requirements
+---
 
-### 1. Testing with pytest
-- Use `pytest` as the testing framework
-- Configure `pytest.ini` with appropriate settings
-- All tests must be in a `tests/` directory
-- Test files must follow `test_*.py` naming convention
-- Include conftest.py if shared fixtures are needed
+## Architecture & Framework Requirements
 
-### 2. Docker & Compose Support
-- Always include a `Dockerfile` and a `docker-compose.yaml` file
-- Use Python 3.11+ as base image
-- Use multi-stage builds for production images
-- Include healthcheck for the container
-- Expose appropriate port (default: 8000)
-- The created `Dockerfile` must include a last line with a comment referencing our library container registry: `#harbor.freshbrewed.science/library/<app name>`
+### 1. Framework Selection
+- **FastAPI**: Preferred for traditional REST APIs and HTTP microservices.
+- **FastMCP**: Preferred for Model Context Protocol (MCP) servers (stdio/SSE transport).
 
-### 3. Version Configuration (version.ini)
-- Always include a root-level `version.ini` file
-- Set the version to `"0.1"`
-- Example format:
+### 2. OpenAPI Specification
+- Generate an `openapi.yaml` file matching valid OpenAPI 3.x specification.
+- For FastAPI apps:
+  - Expose `/openapi.yaml` endpoint.
+  - Enable Swagger UI at `/docs`.
+- For FastMCP servers:
+  - Document tool/resource schemas clearly; expose REST endpoints/OpenAPI spec if standard HTTP transport is enabled.
+
+### 3. Docker & Container Registry Standards
+- Base image: `python:3.11-slim` (or Python 3.11+).
+- Use multi-stage builds for production images and include a container healthcheck.
+- Default container port: `8000`.
+- **CRITICAL**: The final line of the `Dockerfile` MUST end with a comment referencing the team container registry:
+  ```dockerfile
+  #harbor.freshbrewed.science/library/<app-name>
+  ```
+
+### 4. Version Configuration (`version.ini`)
+- Include a root-level `version.ini` initialized to version `0.1`:
   ```ini
   [version]
   version = 0.1
   ```
 
-### 4. Database & Migrations (Alembic)
-- If the application requires a database, use the Python [Alembic](https://alembic.sqlalchemy.org/en/latest/) library for database schema management and migrations.
-- Include `alembic.ini` and a populated `alembic/` directory for database migration scripts.
+### 5. Database & Migrations (Alembic)
+- If the application requires a database, use [Alembic](https://alembic.sqlalchemy.org/en/latest/) for schema migrations.
+- Include `alembic.ini` and a populated `alembic/` migration directory.
 
-### 5. Framework
-- Use either **FastAPI** or **FastMCP** as the web framework
-- FastMCP preferred for MCP (Model Context Protocol) servers
-- FastAPI for traditional REST APIs
+### 6. Testing Strategy
+- Framework: `pytest`.
+- Root-level `pytest.ini` with test configuration.
+- Place all test files under `tests/` named `test_*.py`. Include `conftest.py` for shared fixtures.
 
-### 6. OpenAPI Specification
-- Generate `openapi.yaml` file
-- Must be valid OpenAPI 3.x spec
-- Include endpoint documentation
-- Expose at `/openapi.yaml` endpoint
-- Enable Swagger UI at `/docs`
+### 7. Documentation Standards
+- **`README.md`**: Project title, quick start, prerequisites, API overview.
+- **`INSTALL.md`**: Detailed installation steps, environment variables, database setup, and migration commands.
+- **`SYSTEM.md`**: System architecture including a MermaidJS diagram:
+  ```mermaid
+  graph TB
+      Client --> API[FastAPI/FastMCP]
+      API --> Service[Business Logic]
+      Service --> DB[(Database)]
+      API --> External[External Services]
+  ```
 
-### 7. Required Documentation Files
+---
 
-#### README.md
-- Project title and description
-- Quick start instructions
-- Prerequisites
-- How to run the application
-- API endpoints overview
+## Virtual Environment & Execution Rules
 
-#### INSTALL.md
-- Detailed installation instructions
-- Environment variables configuration
-- Dependencies setup
-- Database setup and Alembic migration instructions if applicable
+- Initialize local environment: `python3 -m venv venv`.
+- Note for automated executions: Prefer invoking commands via direct venv paths (`venv/bin/pytest`, `venv/bin/python`) to ensure environment isolation across stateless shell executions.
 
-#### SYSTEM.md
-- Architecture diagram in MermaidJS format
-- System components description
-- Data flow
-- External dependencies
-- Deployment notes
+---
 
-Example mermaid architecture:
-```mermaid
-graph TB
-    Client --> API[FastAPI/FastMCP]
-    API --> Service[Business Logic]
-    Service --> DB[(Database)]
-    API --> External[External Services]
-```
+## Scaffolding Verification Checklist
 
-### 8. Python Virtual Environment
-- Always use a virtual environment for local development
-- Create the virtual environment using `python -m venv venv`
-- Activate the virtual environment using `source venv/bin/activate` (or `venv\Scripts\activate` on Windows)
+When scaffolding a new Python app, verify all items:
 
-## Implementation Checklist
+- [ ] Virtual environment created (`venv/`)
+- [ ] `Dockerfile` present with `#harbor.freshbrewed.science/library/<app-name>` on the final line
+- [ ] `docker-compose.yaml` present and configured
+- [ ] `version.ini` set to `0.1`
+- [ ] `pyproject.toml` and `pytest.ini` present
+- [ ] `app/main.py` implemented with FastAPI or FastMCP
+- [ ] `openapi.yaml` generated
+- [ ] Documentation complete (`README.md`, `INSTALL.md`, `SYSTEM.md` with Mermaid diagram)
+- [ ] `tests/` directory populated with working `pytest` tests
+- [ ] Database migrations configured via Alembic (if database required)
+- [ ] `.dockerignore` file included
 
-When creating a new Python app, ensure:
-
-- [ ] Virtual environment created with `python -m venv venv`
-- [ ] `Dockerfile` with proper Python base image and ending line comment `#harbor.freshbrewed.science/library/<app name>`
-- [ ] `docker-compose.yaml` file created
-- [ ] `version.ini` file created at root level with version set to `0.1`
-- [ ] Alembic library (https://alembic.sqlalchemy.org/en/latest/) configured if app requires a database
-- [ ] pyproject.toml with all dependencies
-- [ ] pytest.ini configured
-- [ ] FastAPI or FastMCP app in app/main.py
-- [ ] openapi.yaml generated
-- [ ] README.md with quick start
-- [ ] INSTALL.md with detailed setup
-- [ ] SYSTEM.md with MermaidJS architecture
-- [ ] tests/ directory with test files
-- [ ] .dockerignore file
-- [ ] Requirements/dependencies properly pinned
+---
 
 ## Commands
 
-After setup, the following should work:
+After setup, the following standard execution commands apply:
 
 ```bash
 # Setup virtual environment
-python -m venv venv && source venv/bin/activate
+python3 -m venv venv
 
-# Run tests
-pytest
+# Run tests using direct venv executable
+venv/bin/pytest
 
 # Run with Docker
 docker build -t app .
@@ -160,9 +131,8 @@ docker run -p 8000:8000 app
 docker-compose up --build
 
 # Run database migrations (if database required)
-alembic upgrade head
+venv/bin/alembic upgrade head
 
 # Generate OpenAPI spec
-python -c "from app.main import app; print(app.openapi())"
+venv/bin/python -c "from app.main import app; print(app.openapi())"
 ```
-
