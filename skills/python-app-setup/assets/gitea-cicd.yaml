@@ -1,0 +1,89 @@
+name: Build and Publish Docker Image
+
+on:
+    push:
+        branches:
+            - main
+
+jobs:
+    build-and-push:
+        name: Build and Push Docker Image
+        runs-on: my_custom_label
+        container: node:22
+        steps:
+            - name: Checkout Code
+              uses: actions/checkout@v3
+
+            - name: Prepare Env for Docker
+              run: |
+                  whoami
+                  which docker || true
+                  apt update
+                  cat /etc/os-release
+                  apt install -y ca-certificates curl gnupg
+                  mkdir -p /etc/apt/keyrings
+                  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+                  echo \
+                    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+                    focal stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+                  apt update
+                  DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+            - name: Get Version from version.ini
+              id: get_version
+              run: |
+                  # Extract version value from version.ini
+                  VERSION=$(awk -F'=[ \t]*' '/^version[ \t]*=/ {gsub(/[ \t"'\''\r]/, "", $2); print $2}' version.ini)
+                  echo "VERSION=$VERSION" >> $GITHUB_ENV
+                  echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+            - name: Build Dockerfile
+              run: |
+                  export BUILDIMGTAG="`cat Dockerfile | tail -n1 | sed 's/^.*\///g'`"
+                  docker build -t $BUILDIMGTAG:${{ env.VERSION }} .
+                  docker images
+
+            - name: Tag and Push (Harbor)
+              run: |
+                  export BUILDIMGTAG="`cat Dockerfile | tail -n1 | sed 's/^.*\///g'`"
+                  export FINALBUILDTAG="`cat Dockerfile | tail -n1 | sed 's/^#//g'`"
+                  docker tag $BUILDIMGTAG:${{ env.VERSION }} $FINALBUILDTAG:${{ env.VERSION }}
+                  docker images
+                  echo $CR_PAT | docker login harbor.freshbrewed.science -u $CR_USER --password-stdin
+                  docker push $FINALBUILDTAG:${{ env.VERSION }}
+              env: # Or as an environment variable
+                  CR_PAT: ${{ secrets.CR_PAT }}
+                  CR_USER: ${{ secrets.CR_USER }}
+
+            - name: Tag and Push (Dockerhub)
+              run: |
+                  export BUILDIMGTAG="`cat Dockerfile | tail -n1 | sed 's/^.*\///g'`"
+                  docker tag $BUILDIMGTAG:${{ env.VERSION }} $DHUSER/$BUILDIMGTAG:${{ env.VERSION }}
+                  docker images
+                  echo $DHPAT | docker login -u $DHUSER --password-stdin
+                  docker push $DHUSER/$BUILDIMGTAG:${{ env.VERSION }}
+              env: # Or as an environment variable
+                  DHPAT: ${{ secrets.DHPAT }}
+                  DHUSER: ${{ secrets.DHUSER }}
+
+            - name: Prepare Env for Helm OCI Push (Helm v3 reference only)
+              run: |
+                  if [ ! -f /tmp/linux-amd64/helm ]; then
+                    apt update
+                    DEBIAN_FRONTEND=noninteractive apt-get install -y unzip curl || true
+                    wget https://get.helm.sh/helm-v3.14.0-linux-amd64.tar.gz -O /tmp/helm.tar.gz || true
+                    cd /tmp
+                    tar xzvf helm.tar.gz
+                    chmod +x linux-amd64/helm
+                  fi
+
+            - name: Package Helm Chart
+              run: |
+                  set -x
+                  /tmp/linux-amd64/helm package ./helm-chart
+                  export HLMPKG=`ls -tr *.tgz | tail -n1 |  tr -d '\n'`
+                  /tmp/linux-amd64/helm registry login harbor.freshbrewed.science -u $CR_USER -p $CR_PAT
+                  /tmp/linux-amd64/helm push ./$HLMPKG oci://harbor.freshbrewed.science/chartrepo/<app-name>-helm
+              env: # Or as an environment variable
+                  CR_PAT: ${{ secrets.CR_PAT }}
+                  CR_USER: ${{ secrets.CR_USER }}

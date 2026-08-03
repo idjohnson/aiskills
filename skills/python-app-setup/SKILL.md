@@ -13,6 +13,9 @@ All Python applications must adhere to the following file layout:
 
 ```
 project/
+├── .gitea/
+│   └── workflows/
+│       └── cicd.yaml
 ├── Dockerfile
 ├── docker-compose.yaml
 ├── version.ini
@@ -27,6 +30,7 @@ project/
 │   ├── __init__.py
 │   └── main.py
 ├── alembic/ (if database required)
+├── helm-chart/ (required for CI/CD Helm packaging)
 └── tests/
     ├── __init__.py
     └── test_main.py
@@ -85,6 +89,16 @@ project/
       API --> External[External Services]
   ```
 
+### 8. CI/CD (Gitea Actions)
+- Every project must include a Gitea Actions workflow at `.gitea/workflows/cicd.yaml` that builds the Docker image on push to `main`, publishes it to both the team Harbor registry and Dockerhub, and packages/pushes the Helm chart as an OCI artifact.
+- Use [assets/gitea-cicd.yaml](assets/gitea-cicd.yaml) as the template. Copy it into the new project unmodified except for:
+  - The Helm push target `oci://harbor.freshbrewed.science/chartrepo/<app-name>-helm` — replace `<app-name>` with the actual application name.
+- The workflow derives its build tags dynamically, so no other app-specific edits are required as long as these conventions are followed:
+  - `version.ini` has a `version = X.Y` key under a `[version]` (or equivalent) section — the workflow reads it with `awk` to tag the image.
+  - The final line of the `Dockerfile` is `#harbor.freshbrewed.science/library/<app-name>` (see Docker & Container Registry Standards above) — the workflow strips the leading `#` to get the Harbor push target and uses the segment after the last `/` as the Dockerhub image name.
+  - A `helm-chart/` directory exists at the project root containing a valid Helm chart — it gets packaged and pushed as an OCI artifact.
+- The workflow expects these secrets to be configured in the Gitea repo: `CR_PAT`/`CR_USER` (Harbor registry + chart repo credentials) and `DHPAT`/`DHUSER` (Dockerhub credentials). Mention these in `INSTALL.md` so operators know to set them up.
+
 ---
 
 ## Virtual Environment & Execution Rules
@@ -109,6 +123,8 @@ When scaffolding a new Python app, verify all items:
 - [ ] `tests/` directory populated with working `pytest` tests
 - [ ] Database migrations configured via Alembic (if database required)
 - [ ] `.dockerignore` file included
+- [ ] `.gitea/workflows/cicd.yaml` present (from [assets/gitea-cicd.yaml](assets/gitea-cicd.yaml)) with `<app-name>` substituted in the Helm OCI push target
+- [ ] `helm-chart/` directory present with a valid Helm chart for CI/CD packaging
 
 ---
 
@@ -135,4 +151,10 @@ venv/bin/alembic upgrade head
 
 # Generate OpenAPI spec
 venv/bin/python -c "from app.main import app; print(app.openapi())"
+
+# Set up the Gitea CI/CD workflow (replace <skill-dir> with this skill's own
+# directory, and "myapp" with the project name)
+mkdir -p .gitea/workflows
+cp <skill-dir>/assets/gitea-cicd.yaml .gitea/workflows/cicd.yaml
+sed -i 's/<app-name>/myapp/' .gitea/workflows/cicd.yaml
 ```
